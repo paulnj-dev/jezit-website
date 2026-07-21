@@ -65,24 +65,77 @@
   }, { passive: true });
   updateNavigation();
 
+
+  const root = document.documentElement;
+  let starScrollTicking = false;
+
+  const updateStarScroll = () => {
+    root.style.setProperty('--page-scroll-y', `${window.scrollY}px`);
+    starScrollTicking = false;
+  };
+
+  window.addEventListener('scroll', () => {
+    if (!starScrollTicking) {
+      window.requestAnimationFrame(updateStarScroll);
+      starScrollTicking = true;
+    }
+  }, { passive: true });
+
+  updateStarScroll();
+
+
   if (form) {
-    form.addEventListener('submit', event => {
+    form.addEventListener('submit', async event => {
       event.preventDefault();
-      const data = new FormData(form);
-      const name = `${data.get('firstName') || ''} ${data.get('lastName') || ''}`.trim();
-      const email = data.get('email') || '';
-      const phone = data.get('phone') || '-';
-      const message = data.get('message') || '';
-      const subject = encodeURIComponent(`Website inquiry from ${name || 'customer'}`);
-      const body = encodeURIComponent(`ชื่อ: ${name}\nอีเมล: ${email}\nโทรศัพท์: ${phone}\n\nข้อความ:\n${message}`);
 
-      if (formStatus) formStatus.textContent = 'กำลังเปิดโปรแกรมอีเมลของคุณ...';
-      window.location.href = `mailto:sales@jezits.com?subject=${subject}&body=${body}`;
+      if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
+      }
 
-      window.setTimeout(() => {
-        if (formStatus) formStatus.textContent = 'ขอบคุณสำหรับข้อมูล ทีมงานพร้อมติดต่อกลับโดยเร็วที่สุด';
+      const submitButton = form.querySelector('button[type="submit"]');
+      const buttonLabel = submitButton?.querySelector('.button-label');
+      const originalLabel = buttonLabel?.textContent || 'ส่งข้อความ';
+
+      if (submitButton) submitButton.disabled = true;
+      if (buttonLabel) buttonLabel.textContent = 'กำลังส่ง...';
+      if (formStatus) {
+        formStatus.textContent = 'กำลังส่งข้อมูล กรุณารอสักครู่...';
+        formStatus.classList.remove('success', 'error');
+      }
+
+      try {
+        const response = await fetch(form.action, {
+          method: 'POST',
+          body: new FormData(form),
+          headers: {
+            Accept: 'application/json'
+          }
+        });
+
+        const result = await response.json().catch(() => ({}));
+
+        if (!response.ok || result.success === 'false' || result.success === false) {
+          throw new Error(result.message || 'ไม่สามารถส่งข้อมูลได้');
+        }
+
         form.reset();
-      }, 700);
+
+        if (formStatus) {
+          formStatus.textContent = 'ส่งข้อมูลเรียบร้อยแล้ว ทีมงาน JEZiT จะติดต่อกลับโดยเร็วที่สุด';
+          formStatus.classList.add('success');
+        }
+      } catch (error) {
+        console.error('Contact form error:', error);
+
+        if (formStatus) {
+          formStatus.textContent = 'ส่งข้อมูลไม่สำเร็จ กรุณาลองอีกครั้ง หรือติดต่อ sales@jezits.com';
+          formStatus.classList.add('error');
+        }
+      } finally {
+        if (submitButton) submitButton.disabled = false;
+        if (buttonLabel) buttonLabel.textContent = originalLabel;
+      }
     });
   }
 })();
